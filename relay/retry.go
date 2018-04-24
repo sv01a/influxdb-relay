@@ -2,6 +2,7 @@ package relay
 
 import (
 	"bytes"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -45,6 +46,15 @@ func newRetryBuffer(size, batch int, max time.Duration, p poster) *retryBuffer {
 	}
 	go r.run()
 	return r
+}
+
+func (r *retryBuffer) getStats() map[string]string {
+	stats := make(map[string]string)
+	stats["buffering"] = strconv.FormatInt(int64(r.buffering), 10)
+	for k, v := range r.list.getStats() {
+		stats[k] = v
+	}
+	return stats
 }
 
 func (r *retryBuffer) post(buf []byte, query string, auth string) (*responseData, error) {
@@ -130,6 +140,13 @@ type bufferList struct {
 	maxBatch int
 }
 
+func (l *bufferList) getStats() map[string]string {
+	stats := make(map[string]string)
+	stats["size"] = strconv.FormatInt(int64(l.size), 10)
+	stats["maxSize"] = strconv.FormatInt(int64(l.maxSize), 10)
+	return stats
+}
+
 func newBufferList(maxSize, maxBatch int) *bufferList {
 	return &bufferList{
 		cond:     sync.NewCond(new(sync.Mutex)),
@@ -195,6 +212,6 @@ func (l *bufferList) add(buf []byte, query string, auth string) (*batch, error) 
 		b.bufs = append(b.bufs, buf)
 	}
 
-	l.cond.L.Unlock()
+	defer l.cond.L.Unlock()
 	return *cur, nil
 }
